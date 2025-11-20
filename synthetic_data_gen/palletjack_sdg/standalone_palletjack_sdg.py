@@ -62,12 +62,15 @@ from omni.isaac.core.utils.semantics import get_semantics
 rep.settings.carb_settings("/omni/replicator/RTSubframes", 4)
 
 
-# This is the location of custom box USDs in the simready asset library or filesystem.
-# Paths can be Nucleus-relative (eg: "/MyAssets/Boxes/box.usd") and will be resolved
-# with `prefix_with_isaac_asset_server`, or absolute filesystem paths (eg: "/tmp/box.usd").
-BOXES = ["/Boxes/blue_box.usd",
-         "/Boxes/green_box.usd",
-         "/Boxes/red_box.usd"]
+# This is the location of the palletjacks in the simready asset library
+PALLETJACKS = [             #"/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxB_01_1268.usd",
+                            # # "/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxB_01_1482.usd",
+                            # # "/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxB_01_1683.usd",
+                            # "/home/ubuntu/Desktop/PoC3/synthetic_data_gen/synthetic_data_gen/Boxes/blue_box.usd"]
+                            "/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxB_01_291.usd",
+                            "/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxD_01_1454.usd",
+                            "/Isaac/Environments/Simple_Warehouse/Props/SM_CardBoxD_01_1513.usd"]
+
 
 # The warehouse distractors which will be added to the scene and randomized
 DISTRACTORS_WAREHOUSE = 2 * ["/Isaac/Environments/Simple_Warehouse/Props/S_TrafficCone.usd",
@@ -86,6 +89,7 @@ DISTRACTORS_WAREHOUSE = 2 * ["/Isaac/Environments/Simple_Warehouse/Props/S_Traff
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_BottlePlasticD_01.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_BottlePlasticE_01.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_BucketPlastic_B.usd",
+                           
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_CratePlastic_A_04.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_CratePlastic_B_03.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_CratePlastic_B_05.usd",
@@ -93,11 +97,6 @@ DISTRACTORS_WAREHOUSE = 2 * ["/Isaac/Environments/Simple_Warehouse/Props/S_Traff
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_CratePlastic_E_02.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_PushcartA_02.usd",
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_RackPile_04.usd",
-                            "/Distractions/Monitor__2_Cube_402.usd",
-                            "/Distractions/NaturalBostonRoundBottle_A03_PR_NVD_04.usd",
-                            "/Distractions/PlasticJerrican_A03_PR_V_NVD_01.usd",
-                            "/Distractions/PlasticShoppingCart_A01_DarkGreen_01.usd",
-                            "/Distractions/shelf.usd"
                             "/Isaac/Environments/Simple_Warehouse/Props/SM_RackPile_03.usd"]
 
 
@@ -235,32 +234,13 @@ def full_textures_list():
     return full_tex_list
 
 
-def add_boxes():
-    """Create Replicator prims from USDs listed in BOXES and tag them with semantic class 'box'.
-
-    This function tries to resolve each path via the Isaac Nucleus asset root. If the
-    asset server is unavailable it will fall back to the raw path (useful for absolute
-    filesystem paths).
-    """
-    rep_obj_list = []
-    for box_path in BOXES:
-        usd_path = box_path
-        try:
-            # try resolving as a Nucleus-relative path
-            usd_path = prefix_with_isaac_asset_server(box_path)
-        except Exception:
-            # if the Nucleus server isn't available, fall back to the provided path
-            # (this allows absolute filesystem paths)
-            if not os.path.isabs(box_path):
-                carb.log_warn(f"Could not resolve '{box_path}' via Nucleus; using raw path – ensure the path exists: {box_path}")
-            usd_path = box_path
-
-        # create one instance per USD and tag it with semantic class 'box'
-        rep_obj = rep.create.from_usd(usd_path, semantics=[("class", "box")], count=1)
-        rep_obj_list.append(rep_obj)
-
-    rep_box_group = rep.create.group(rep_obj_list)
-    return rep_box_group
+def add_palletjacks():
+    full_dist_list = []
+    for palletjack_pathq in PALLETJACKS:
+            full_dist_list.append(prefix_with_isaac_asset_server(palletjack_pathq))
+    rep_obj_list = [rep.create.from_usd(palletjack_path, semantics=[("class", "palletjack")], count=2) for palletjack_path in full_dist_list]
+    rep_palletjack_group = rep.create.group(rep_obj_list)
+    return rep_palletjack_group
 
 
 def add_distractors(distractor_type="warehouse"):
@@ -301,11 +281,11 @@ def main():
 
 
     textures = full_textures_list()
-    rep_box_group = add_boxes()
+    rep_palletjack_group = add_palletjacks()
     rep_distractor_group = add_distractors(distractor_type=args.distractors)
 
-    # We only need labels for the boxes
-    update_semantics(stage=stage, keep_semantics=["box"])
+    # We only need labels for the palletjack objects
+    update_semantics(stage=stage, keep_semantics=["palletjack"])
 
     # Create camera with Replicator API for gathering data
     cam = rep.create.camera(clipping_range=(0.1, 1000000))
@@ -322,12 +302,20 @@ def main():
         with rep.get.prims(path_pattern="SteerAxles"):
             rep.randomizer.color(colors=rep.distribution.uniform((0, 0, 0), (1, 1, 1)))
 
-        # Randomize the pose of all the added boxes
-        with rep_box_group:
+        # Randomize the pose of all the added palletjacks
+        colors = [
+            (1.0, 0.0, 0.0),   # red
+            (0.0, 1.0, 0.0),   # green
+            (0.0, 0.0, 1.0)    # blue
+        ]
+        with rep_palletjack_group:
             rep.modify.pose(position=rep.distribution.uniform((-6, -6, 0), (6, 12, 0)),
                             rotation=rep.distribution.uniform((0, 0, 0), (0, 0, 360)),
-                            scale=rep.distribution.uniform((0.5, 0.5, 0.5), (1.0, 1.0, 1.0)))
-
+                            scale=rep.distribution.uniform((1, 1, 1), (1, 1, 1)))
+            # rep.modify.attribute(
+            #     "primvars:displayColor",
+            #     rep.distribution.choice(colors)
+            # )
         # Modify the pose of all the distractors in the scene
         if args.distractors != "None":
             with rep_distractor_group:
